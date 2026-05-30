@@ -22,7 +22,7 @@ export const errorHandler = (
   const code = StatusCodes.INTERNAL_SERVER_ERROR;
   res.status(code).json({
     code,
-    message: 'An unexpected error occurred. Please try again later.',
+    message: 'An unexpected error occurred. Please try again later. ' +err?.message,
     data: null,
   });
 };

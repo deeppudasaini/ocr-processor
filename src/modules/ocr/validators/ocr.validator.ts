@@ -48,9 +48,15 @@ export const uploadInvoiceFile: RequestHandler = upload.array('file',MAX_FILE_CO
 export const requireFile: RequestHandler = (req, _res, next): void => {
   const files = req.files as Express.Multer.File[] | undefined;
 
+
   if (!files || files.length === 0) {
     return next(AppError.badRequest(
       'At least one invoice image file is required. Send it as multipart/form-data with the key "files".',
+    ));
+  }
+  if(files?.length>MAX_FILE_COUNT) {
+    return next(AppError.badRequest(
+      `Too many files uploaded. Maximum allowed is ${MAX_FILE_COUNT}.`,
     ));
   }
 

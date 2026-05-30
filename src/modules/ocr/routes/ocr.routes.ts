@@ -5,6 +5,6 @@ import { uploadInvoiceFile, requireFile } from '@modules/ocr/validators/ocr.vali
 export const ocrRoutes = Router();
 const controller = new OcrController();
 
-ocrRoutes.post('/process',            uploadInvoiceFile, requireFile, controller.processInvoice);
+ocrRoutes.post('/process',            uploadInvoiceFile,requireFile, controller.processInvoice);
 ocrRoutes.get('/jobs/:jobId',         controller.getJobStatus);
 ocrRoutes.get('/jobs/:jobId/stream',  controller.streamJobStatus);
