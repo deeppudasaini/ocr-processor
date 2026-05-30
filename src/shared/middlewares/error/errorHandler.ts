@@ -3,7 +3,6 @@ import { StatusCodes } from 'http-status-codes';
 import { AppError } from '@shared/errors/AppError';
 import { logger } from '@infra/monitoring/logger';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler = (
   err: Error,
   _req: Request,
@@ -19,8 +18,6 @@ export const errorHandler = (
     });
     return;
   }
-
-  // Unknown / programmer errors
   logger.error('[UnhandledError]', { message: err.message, stack: err.stack });
   const code = StatusCodes.INTERNAL_SERVER_ERROR;
   res.status(code).json({

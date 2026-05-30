@@ -1,7 +1,4 @@
-/**
- * Generic base repository contract.
- * All domain-specific repositories extend or implement this.
- */
+
 export interface IBaseRepository<Model> {
   findById(id: string): Promise<Model | null>;
   findAll(): Promise<Model[]>;
@@ -10,9 +7,7 @@ export interface IBaseRepository<Model> {
   delete(id: string): Promise<boolean>;
 }
 
-/**
- * Generic use-case contract following the Command pattern.
- */
+
 export interface IBaseUseCase<TRequest, TResponse> {
   execute(request: TRequest): Promise<TResponse>;
 }
