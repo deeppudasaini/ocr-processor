@@ -1,12 +1,13 @@
 import { OcrJob } from '@modules/ocr/models/ocr-job.model';
 import { BillInfo } from '@modules/ocr/models/bill-info.model';
 import { OcrProcessorAbstract } from '@modules/ocr/workers/abstracts/ocr-processor.abstract';
-import { BillInfoRepository, CreateBillInfoInput } from '@modules/ocr/repositories/bill-info.repository';
+import { BillInfoRepository } from '@modules/ocr/repositories/bill-info.repository';
 import { LocalStorageService } from '@infra/storage/local/storage';
 import { MinioStorageService } from '@infra/storage/minio/minio.client';
 import { IOuterResponse, VedasApiResponse } from '@modules/ocr/types/ocr.types';
 import { env } from '@config/env';
 import { normalizeVedasResponse } from '@modules/ocr/workers/utils/vedas-response-normalizer';
+import { CreateBillInfoInput } from '@modules/ocr/dto/create-bill-info.dto';
 
 export class VedasOcrProcessorServiceImpl extends OcrProcessorAbstract<Buffer, VedasApiResponse> {
   private readonly billInfoRepo = new BillInfoRepository();
@@ -99,6 +100,8 @@ export class VedasOcrProcessorServiceImpl extends OcrProcessorAbstract<Buffer, V
         unitPrice:  parseNum(item.unit_price),
         totalPrice: parseNum(item.total_price),
       })),
+      billFormat: r.billFormat,
+      billDateBs:r.billDateBs
     };
 
     return transformed as Partial<BillInfo>;
@@ -106,6 +109,6 @@ export class VedasOcrProcessorServiceImpl extends OcrProcessorAbstract<Buffer, V
 
   protected async saveExtractedData(data: Partial<CreateBillInfoInput>, job: OcrJob): Promise<void> {
     if (!data.jobId) throw new Error('jobId is required to save extracted data');
-    await this.billInfoRepo.create(data as CreateBillInfoInput);
+    await this.billInfoRepo.saveBillsInTransaction(data as CreateBillInfoInput);
   }
 }

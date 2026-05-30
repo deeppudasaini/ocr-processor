@@ -24,6 +24,9 @@ export class BillInfo {
   @Column({ name: 'bill_date', type: 'date', nullable: true })
   billDate!: string | null;
 
+  @Column({ name: 'bill_date_bs', type: 'text', nullable: true })
+  billDateBs!: string | null;
+
   @Column({ name: 'bill_time', type: 'time', nullable: true })
   billTime!: string | null;
 
@@ -48,6 +51,9 @@ export class BillInfo {
   @Column({ name: 'total_amount', type: 'numeric', precision: 18, scale: 2, nullable: true })
   totalAmount!: number | null;
 
+  @Column({name:'bill_format', type: 'text', nullable: true})
+  billFormat!: string | null;
+
   @Column({ name: 'udf1', type: 'text', nullable: true })
   udf1!: string | null;
 
@@ -56,6 +62,7 @@ export class BillInfo {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
+
 
   @OneToMany(() => BillItem, (item) => item.billInfo, { cascade: true, eager: true })
   items!: BillItem[];

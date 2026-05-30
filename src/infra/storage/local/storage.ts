@@ -44,12 +44,4 @@ export class LocalStorageService {
     }
     return fs.promises.readFile(fullPath);
   }
-
-  async deleteFile(relativePath: string): Promise<void> {
-    const fullPath = path.join(this.basePath, relativePath);
-    if (fs.existsSync(fullPath)) {
-      await fs.promises.unlink(fullPath);
-      logger.debug(`[LocalStorage] Deleted file: ${relativePath}`);
-    }
-  }
 }

@@ -3,42 +3,12 @@ import { AppDataSource } from '@infra/database/typeorm/data-source';
 import { BillInfo } from '@modules/ocr/models/bill-info.model';
 import { BillItem } from '@modules/ocr/models/bill-item.model';
 import { ApiLog } from '@modules/ocr/models/api-log.model';
+import { CreateBillInfoInput } from '@modules/ocr/dto/create-bill-info.dto';
+import { IBaseRepository } from '@shared/interfaces';
+import { CreateApiLogInput } from '@modules/ocr/dto/create-api-log.dto';
+import { log } from 'winston';
 
-export interface CreateBillInfoInput {
-  jobId: string;
-  merchantName?: string | null;
-  merchantAddress?: string | null;
-  billDate?: string | null;
-  billTime?: string | null;
-  currency?: string | null;
-  subtotalAmount?: number | null;
-  taxAmount?: number | null;
-  serviceCharge?: number | null;
-  tipAmount?: number | null;
-  discountAmount?: number | null;
-  totalAmount?: number | null;
-  udf1?: string | null;
-  udf2?: string | null;
-  items: Array<{
-    itemName?: string | null;
-    quantity?: number | null;
-    unitPrice?: number | null;
-    totalPrice?: number | null;
-  }>;
-}
-
-export interface CreateApiLogInput {
-  url: string;
-  requestPayload?: Record<string, unknown> | null;
-  responsePayload?: Record<string, unknown> | null;
-  requestedOn: Date;
-  responseOn?: Date | null;
-  status?: string | null;
-  ownerType: string;
-  ownerId: string;
-}
-
-export class BillInfoRepository {
+export class BillInfoRepository implements IBaseRepository<BillInfo> {
   private get billInfoRepo(): Repository<BillInfo> {
     return AppDataSource.getRepository(BillInfo);
   }
@@ -51,7 +21,7 @@ export class BillInfoRepository {
     return AppDataSource.getRepository(ApiLog);
   }
 
-  async create(input: CreateBillInfoInput): Promise<BillInfo> {
+  async saveBillsInTransaction(input: CreateBillInfoInput): Promise<BillInfo> {
     return AppDataSource.transaction(async (manager) => {
       const billInfo = manager.create(BillInfo, {
         jobId: input.jobId,
@@ -66,8 +36,10 @@ export class BillInfoRepository {
         tipAmount: input.tipAmount ?? null,
         discountAmount: input.discountAmount ?? null,
         totalAmount: input.totalAmount ?? null,
+        billFormat:input.billFormat ?? null,
         udf1: input.udf1 ?? null,
         udf2: input.udf2 ?? null,
+        billDateBs: input.billDateBs ?? null,
       });
 
       const savedBillInfo = await manager.save(BillInfo, billInfo);
@@ -105,5 +77,25 @@ export class BillInfoRepository {
       ownerId: input.ownerId,
     });
     return this.apiLogRepo.save(log);
+  }
+
+  delete(id: string): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
+  findAll(): Promise<BillInfo[]> {
+    return Promise.resolve([]);
+  }
+
+  findById(id: string): Promise<BillInfo | null> {
+    return Promise.resolve(null);
+  }
+
+  update(id: string, data: Partial<BillInfo>): Promise<BillInfo | null> {
+    return Promise.resolve(null);
+  }
+
+  create(data: Partial<BillInfo>): Promise<BillInfo> {
+    return Promise.resolve(new BillInfo());
   }
 }

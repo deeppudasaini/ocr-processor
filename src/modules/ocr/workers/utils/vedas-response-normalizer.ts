@@ -1,5 +1,6 @@
 import { VedasApiResponse } from '@modules/ocr/types/ocr.types';
 import { NormalizedVedasResponse } from '@modules/ocr/workers/interfaces/normalized-vedas-response.interface';
+import { BillTypeEnum } from '@modules/ocr/constants/bill-type.enum';
 
 
 
@@ -46,7 +47,23 @@ function toTimeOrNull(val: unknown): string | null {
   const ascii = devanagariToAscii(str).replace(/[^\d:]/g, '');
   return ascii === '' ? null : ascii;
 }
+function containsDevanagari(val: unknown): boolean {
+  if (!val) return false;
+  return /[\u0900-\u097F]/.test(String(val));
+}
 
+// Check multiple fields to determine the dominant script
+function detectBillFormat(data: Record<string, unknown>): BillTypeEnum {
+  const fieldsToCheck = [
+    data['merchant_name'],
+    data['address'],
+    data['date'],
+    data['currency'],
+  ];
+
+  const hasDevanagari = fieldsToCheck.some(containsDevanagari);
+  return hasDevanagari ? BillTypeEnum.DEVNAGARI : BillTypeEnum.ENGLISH;
+}
 
 export function normalizeVedasResponse(raw: VedasApiResponse): NormalizedVedasResponse {
   const r = raw as unknown as Record<string, unknown>;
@@ -57,10 +74,12 @@ export function normalizeVedasResponse(raw: VedasApiResponse): NormalizedVedasRe
 
   const rawItems = Array.isArray(data['items']) ? data['items'] : [];
 
+  let billFormat = detectBillFormat(data);
+
   return {
     merchantName:    toStringOrNull(data['merchant_name']   ?? data['merchantName']),
     merchantAddress: toStringOrNull(data['address']         ?? data['merchant_address']),
-    billDate:        toIsoParsableDateOrNull(data['date']   ?? data['bill_date']),
+    billDate:         billFormat === 'ENGLISH'? toIsoParsableDateOrNull(data['date'] ?? data['bill_date']) : null,
     billTime:        toTimeOrNull(data['time']              ?? data['bill_time']),
     currency:        toStringOrNull(data['currency']),
     subtotalAmount:  toNumericStringOrNull(data['subtotal_amount'] ?? data['subtotal']),
@@ -78,5 +97,8 @@ export function normalizeVedasResponse(raw: VedasApiResponse): NormalizedVedasRe
         total_price: toNumericStringOrNull(i['total_price'] ?? i['total']),
       };
     }),
+    billFormat,
+    billDateBs:billFormat === BillTypeEnum.DEVNAGARI ? toIsoParsableDateOrNull(data['bill_date_bs'] ?? data['billDateBs']) : null,
+
   };
 }

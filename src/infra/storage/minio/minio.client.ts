@@ -66,11 +66,6 @@ export class MinioStorageService {
     });
   }
 
-  async deleteFile(key: string): Promise<void> {
-    await this.client.removeObject(this.bucket, key);
-    logger.debug(`[MinIO] Deleted: ${key}`);
-  }
-
   private getMimeType(ext: string): string {
     const map: Record<string, string> = {
       '.jpg': 'image/jpeg',

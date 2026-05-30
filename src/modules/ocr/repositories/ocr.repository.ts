@@ -4,16 +4,10 @@ import { OcrJob } from '@modules/ocr/models/ocr-job.model';
 import { OcrJobStatus } from '@shared/constants/ocr-job-status.enum';
 import { OcrProcessorEnum } from '@shared/constants/ocr-processor.enum';
 import { type FileStorage } from '@modules/ocr/models/ocr-job.model';
+import { CreateOcrJobInput } from '@modules/ocr/dto/create-ocr-job.dto';
+import { IBaseRepository } from '@shared/interfaces';
 
-export interface CreateOcrJobInput {
-  jobType: OcrProcessorEnum;
-  requestedBy?: string;
-  filePath: string;
-  fileStorage: FileStorage;
-  jobMeta?: Record<string, unknown>;
-}
-
-export class OcrJobRepository {
+export class OcrJobRepository implements IBaseRepository<OcrJob>{
   private get repo(): Repository<OcrJob> {
     return AppDataSource.getRepository(OcrJob);
   }
@@ -62,5 +56,13 @@ export class OcrJobRepository {
       errorMessage,
       updatedAt: new Date(),
     });
+  }
+
+  delete(id: string): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
+  update(id: string, data: Partial<OcrJob>): Promise<OcrJob | null> {
+    return Promise.resolve(null);
   }
 }

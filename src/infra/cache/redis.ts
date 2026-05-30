@@ -48,7 +48,6 @@ export const disconnectRedis = async (): Promise<void> => {
   }
 };
 
-/** Convenience helpers */
 export const redisSet = async (key: string, value: string, ttlSeconds?: number): Promise<void> => {
   const client = getRedisClient();
   if (ttlSeconds) {

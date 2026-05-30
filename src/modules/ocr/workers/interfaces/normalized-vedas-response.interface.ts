@@ -1,3 +1,5 @@
+import { BillTypeEnum } from '@modules/ocr/constants/bill-type.enum';
+
 export interface NormalizedVedasResponse {
   merchantName:    string | null;
   merchantAddress: string | null;
@@ -16,4 +18,6 @@ export interface NormalizedVedasResponse {
     unit_price:  string | null;
     total_price: string | null;
   }>;
+  billFormat: BillTypeEnum | null;
+  billDateBs:string|null
 }

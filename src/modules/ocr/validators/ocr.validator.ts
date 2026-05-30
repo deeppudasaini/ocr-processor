@@ -5,11 +5,7 @@ import { AppError } from '@shared/errors/AppError';
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/bmp',
-  'image/tiff',
+  'image/png'
 ];
 
 const MAX_FILE_SIZE_MB = 10;
@@ -27,7 +23,7 @@ const fileFilter = (
   } else {
     cb(
       new AppError(
-        `Invalid file type "${file.mimetype}". Only image files are accepted (JPEG, PNG, GIF, WEBP, BMP, TIFF).`,
+        `Invalid file type "${file.mimetype}". Only image files are accepted (JPEG, PNG, JPG).`,
         400,
       ),
     );
