@@ -13,6 +13,7 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_COUNT   = 5;
 
 const memoryStorage = multer.memoryStorage();
 
@@ -37,17 +38,21 @@ const upload = multer({
   storage: memoryStorage,
   limits: {
     fileSize: MAX_FILE_SIZE_MB * 1024 * 1024,
-    files: 1,
+    files: MAX_FILE_COUNT,
   },
   fileFilter,
 });
 
-export const uploadInvoiceFile: RequestHandler = upload.single('file');
+export const uploadInvoiceFile: RequestHandler = upload.array('file',MAX_FILE_COUNT);
 
 export const requireFile: RequestHandler = (req, _res, next): void => {
-  if (!req.file) {
-    return next(AppError.badRequest('An invoice image file is required. Send it as multipart/form-data with the key "file".'));
+  const files = req.files as Express.Multer.File[] | undefined;
+
+  if (!files || files.length === 0) {
+    return next(AppError.badRequest(
+      'At least one invoice image file is required. Send it as multipart/form-data with the key "files".',
+    ));
   }
-  console.log("req.file:", req.file);
+
   next();
 };

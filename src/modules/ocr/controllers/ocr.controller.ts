@@ -12,18 +12,25 @@ export class OcrController {
   private readonly checkStatusUseCase = new CheckOcrJobStatusUseCase();
   private readonly streamStatusUseCase = new StreamOcrJobStatusUseCase();
 
+// ocr.controller.ts
   processInvoice = asyncHandler(async (req: Request, res: Response) => {
-    if (!req.file) throw AppError.badRequest('No file uploaded');
+    const files = req.files as Express.Multer.File[];
 
-    const result = await this.createJobUseCase.execute({
-      fileBuffer:   req.file.buffer,
-      originalName: req.file.originalname
+    const results = await Promise.all(
+      files.map((file) =>
+        this.createJobUseCase.execute({
+          fileBuffer:   file.buffer,
+          originalName: file.originalname,
+        })
+      )
+    );
 
-    });
-
-    return { data: result, message: 'Job created', code: StatusCodes.ACCEPTED };
+    return {
+      data:    results,
+      message: `${results.length} job(s) created successfully and queued for extraction.`,
+      code:    StatusCodes.ACCEPTED,
+    };
   });
-
   getJobStatus = asyncHandler(async (req: Request, res: Response) => {
     const { jobId } = req.params;
     if (!jobId) throw AppError.badRequest('jobId is required');
@@ -48,4 +55,5 @@ export class OcrController {
       }
     }
   };
+
 }
