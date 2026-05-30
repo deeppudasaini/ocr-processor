@@ -12,13 +12,14 @@ import { httpLogStream } from '@infra/monitoring/logger';
 import { errorHandler } from '@shared/middlewares/error/errorHandler';
 import { notFound } from '@shared/middlewares/error/notFound';
 import { ocrRoutes } from '@modules/ocr/routes/ocr.routes';
+import { responseHandler } from '@shared/middlewares/response/responseHandler';
 
 
 export const applyRoutes = (app: Application): void => {
   const prefix = env?.API_PREFIX;
 
   app.use(`${prefix}/ocr`, ocrRoutes);
-
+  app.use(responseHandler);
   app.use(notFound);
   app.use(errorHandler);
 };

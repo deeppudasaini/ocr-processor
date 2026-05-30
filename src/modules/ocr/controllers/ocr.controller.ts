@@ -3,7 +3,6 @@ import { Request, Response } from 'express';
 import { CreateInvoiceProcessingJobUseCase } from '@modules/ocr/usecases/create-invoice-processing-job.usecase';
 import { CheckOcrJobStatusUseCase } from '@modules/ocr/usecases/check-ocr-job-status.usecase';
 import { StreamOcrJobStatusUseCase } from '@modules/ocr/usecases/stream-ocr-job-status.usecase';
-import { CreateJobDto } from '@modules/ocr/dtos/create-job.dto';
 import { AppError } from '@shared/errors/AppError';
 import { asyncHandler } from '@shared/utils/asyncHandler';
 import { StatusCodes } from 'http-status-codes';
@@ -16,13 +15,10 @@ export class OcrController {
   processInvoice = asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) throw AppError.badRequest('No file uploaded');
 
-    const dto = req.body as CreateJobDto;
-
     const result = await this.createJobUseCase.execute({
       fileBuffer:   req.file.buffer,
-      originalName: req.file.originalname,
-      requestedBy:  dto.requestedBy,
-      processor:    dto.processor,
+      originalName: req.file.originalname
+
     });
 
     return { data: result, message: 'Job created', code: StatusCodes.ACCEPTED };

@@ -14,7 +14,9 @@ export interface VedasApiItem {
   unit_price: string;
   total_price: string;
 }
-
+export interface IOuterResponse {
+  data: VedasApiResponse[];
+}
 export interface VedasApiResponse {
   success: boolean;
   filename: string;
@@ -39,9 +41,4 @@ export interface OcrJobStatusResult {
   status: OcrJobStatus;
   completedOn: Date | null;
   errorMessage: string | null;
-}
-
-export interface CreateJobResult {
-  jobId: string;
-  message: string;
 }

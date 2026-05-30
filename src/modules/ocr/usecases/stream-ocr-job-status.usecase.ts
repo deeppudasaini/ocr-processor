@@ -1,87 +1,114 @@
+// stream-ocr-job-status.usecase.ts
 import { Response } from 'express';
 import { OcrJobRepository } from '@modules/ocr/repositories/ocr.repository';
+import { OcrJob } from '@modules/ocr/models/ocr-job.model';
 import { redisGet } from '@infra/cache/redis';
 import { AppError } from '@shared/errors/AppError';
 import { OcrJobStatus } from '@shared/constants/ocr-job-status.enum';
+import { OcrJobStatusResult } from '@modules/ocr/types/ocr.types';
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS  = 2000;
 const TERMINAL_STATUSES = new Set([OcrJobStatus.COMPLETED, OcrJobStatus.FAILED]);
 
 export class StreamOcrJobStatusUseCase {
   private readonly repository = new OcrJobRepository();
+  private readonly cacheKey   = (jobId: string) => `ocr:job:${jobId}:status`;
 
   async execute(jobId: string, res: Response): Promise<void> {
     const job = await this.repository.findById(jobId);
-    if (!job) {
-      throw AppError.notFound(`OCR Job with ID ${jobId} not found.`);
-    }
+    if (!job) throw AppError.notFound(`OCR Job with ID ${jobId} not found.`);
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
+    this.initSseHeaders(res);
+    this.sendEvent(res, 'status', this.toStatusPayload(job));
 
-    const sendEvent = (event: string, data: Record<string, unknown>) => {
-      res.write(`event: ${event}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
-    sendEvent('status', {
-      jobId,
-      status: job.jobStatus,
-      completedOn: job.completedOn,
-      errorMessage: job.errorMessage,
-    });
-
-    if (TERMINAL_STATUSES.has(job?.jobStatus as any)) {
-      sendEvent('done', { jobId });
-      res.end();
+    if (TERMINAL_STATUSES.has(job.jobStatus as any)) {
+      this.sendDone(res, jobId);
       return;
     }
 
-    const interval = setInterval(async () => {
+    this.startPolling(jobId, res);
+  }
+
+
+  private initSseHeaders(res: Response): void {
+    res.setHeader('Content-Type',      'text/event-stream');
+    res.setHeader('Cache-Control',     'no-cache');
+    res.setHeader('Connection',        'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+  }
+
+  private sendEvent(res: Response, event: string, data: Record<string, unknown>): void {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  private sendDone(res: Response, jobId: string): void {
+    this.sendEvent(res, 'done', { jobId });
+    res.end();
+  }
+
+  private sendError(res: Response, jobId: string, message: string): void {
+    this.sendEvent(res, 'error', { jobId, message });
+    res.end();
+  }
+
+
+  private startPolling(jobId: string, res: Response): void {
+    const interval: ReturnType<typeof setInterval> = setInterval(async () => {
       try {
-        const cacheKey   = `ocr:job:${jobId}:status`;
-        const cached     = await redisGet(cacheKey);
-        const status     = cached ?? (await this.repository.findById(jobId))?.jobStatus;
-
-        if (!status) {
-          clearInterval(interval);
-          sendEvent('error', { jobId, message: 'Job not found during polling' });
-          res.end();
-          return;
-        }
-
-        sendEvent('status', {
-          jobId,
-          status,
-          completedOn: null,
-          errorMessage: null,
-        });
-
-        if (TERMINAL_STATUSES.has(status as any)) {
-          const finalJob = await this.repository.findById(jobId);
-          sendEvent('status', {
-            jobId,
-            status:       finalJob?.jobStatus ?? status,
-            completedOn:  finalJob?.completedOn  ?? null,
-            errorMessage: finalJob?.errorMessage ?? null,
-          });
-          sendEvent('done', { jobId });
-          clearInterval(interval);
-          res.end();
-        }
+        await this.poll(jobId, res, interval);
       } catch (err) {
         clearInterval(interval);
-        sendEvent('error', { jobId, message: (err as Error).message });
-        res.end();
+        this.sendError(res, jobId, (err as Error).message);
       }
     }, POLL_INTERVAL_MS);
 
-    // Clean up if client disconnects
-    res.on('close', () => {
+    res.on('close', () => clearInterval(interval));
+  }
+
+  private async poll(
+    jobId:    string,
+    res:      Response,
+    interval: ReturnType<typeof setInterval>,
+  ): Promise<void> {
+    const status = await this.resolveCurrentStatus(jobId);
+
+    if (!status) {
       clearInterval(interval);
-    });
+      this.sendError(res, jobId, 'Job not found during polling');
+      return;
+    }
+
+    this.sendEvent(res, 'status', { jobId, status, completedOn: null, errorMessage: null });
+
+    if (TERMINAL_STATUSES.has(status)) {
+      clearInterval(interval);
+      await this.sendFinalStatus(jobId, res);
+      this.sendDone(res, jobId);
+    }
+  }
+
+
+  private async resolveCurrentStatus(jobId: string): Promise<OcrJobStatus | null> {
+    const cached = await redisGet(this.cacheKey(jobId));
+    if (cached) return cached as OcrJobStatus;
+
+    const job = await this.repository.findById(jobId);
+    return job?.jobStatus ?? null;
+  }
+
+  private async sendFinalStatus(jobId: string, res: Response): Promise<void> {
+    const job = await this.repository.findById(jobId);
+    this.sendEvent(res, 'status', this.toStatusPayload(job, jobId));
+  }
+
+  private toStatusPayload(job: OcrJob | null | undefined, fallbackJobId?: string): Record<string, unknown> {
+    return {
+      jobId:        job?.id        ?? fallbackJobId,
+      status:       job?.jobStatus ?? null,
+      completedOn:  job?.completedOn  ?? null,
+      errorMessage: job?.errorMessage ?? null,
+    };
   }
 }

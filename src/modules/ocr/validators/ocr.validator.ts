@@ -48,5 +48,6 @@ export const requireFile: RequestHandler = (req, _res, next): void => {
   if (!req.file) {
     return next(AppError.badRequest('An invoice image file is required. Send it as multipart/form-data with the key "file".'));
   }
+  console.log("req.file:", req.file);
   next();
 };

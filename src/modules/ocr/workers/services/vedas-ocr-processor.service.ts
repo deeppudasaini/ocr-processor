@@ -4,7 +4,7 @@ import { OcrProcessorAbstract } from '@modules/ocr/workers/abstracts/ocr-process
 import { BillInfoRepository, CreateBillInfoInput } from '@modules/ocr/repositories/bill-info.repository';
 import { LocalStorageService } from '@infra/storage/local/storage';
 import { MinioStorageService } from '@infra/storage/minio/minio.client';
-import { VedasApiResponse } from '@modules/ocr/types/ocr.types';
+import { IOuterResponse, VedasApiResponse } from '@modules/ocr/types/ocr.types';
 import { env } from '@config/env';
 import { normalizeVedasResponse } from '@modules/ocr/workers/utils/vedas-response-normalizer';
 
@@ -29,12 +29,14 @@ export class VedasOcrProcessorServiceImpl extends OcrProcessorAbstract<Buffer, V
 
     try {
       const formData = new FormData();
-      formData.append('files', new Blob([file]), 'invoice.jpg');
+      formData.append('files', new Blob([file]), job.jobMeta?.fileName as string);
 
       const res          = await fetch(apiUrl, { method: 'POST', body: formData });
       const responseTime = new Date();
-      const responseData = await res.json() as VedasApiResponse;
-      if (!res.ok || !responseData.success) {
+      const responseData = (await res.json()) as  IOuterResponse;
+
+      let billResponse=responseData?.data?.[0];
+      if (!res.ok || !billResponse?.success) {
         throw new Error(`Vedas API error: ${res.status} ${res.statusText}`,{
           cause:responseData
         });
@@ -50,7 +52,7 @@ export class VedasOcrProcessorServiceImpl extends OcrProcessorAbstract<Buffer, V
         ownerId:         job.id,
       });
 
-      return responseData;
+      return billResponse as VedasApiResponse;
     } catch (error) {
 
       const err = error as Error & { cause?: unknown };
