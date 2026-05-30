@@ -1,4 +1,3 @@
-// stream-ocr-job-status.usecase.ts
 import { Response } from 'express';
 import { OcrJobRepository } from '@modules/ocr/repositories/ocr.repository';
 import { OcrJob } from '@modules/ocr/models/ocr-job.model';
@@ -8,6 +7,7 @@ import { OcrJobStatus } from '@shared/constants/ocr-job-status.enum';
 import { OcrJobStatusResult } from '@modules/ocr/types/ocr.types';
 
 const POLL_INTERVAL_MS  = 2000;
+const POLL_TIMEOUT_MS   = 5 * 60 * 1000;
 const TERMINAL_STATUSES = new Set([OcrJobStatus.COMPLETED, OcrJobStatus.FAILED]);
 
 export class StreamOcrJobStatusUseCase {
@@ -60,11 +60,20 @@ export class StreamOcrJobStatusUseCase {
         await this.poll(jobId, res, interval);
       } catch (err) {
         clearInterval(interval);
+        clearTimeout(timeout);
         this.sendError(res, jobId, (err as Error).message);
       }
     }, POLL_INTERVAL_MS);
 
-    res.on('close', () => clearInterval(interval));
+    const timeout: ReturnType<typeof setTimeout> = setTimeout(() => {
+      clearInterval(interval);
+      this.sendError(res, jobId, 'Stream timed out after 5 minutes. Please reconnect.');
+    },POLL_TIMEOUT_MS );
+
+    res.on('close', () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    });
   }
 
   private async poll(

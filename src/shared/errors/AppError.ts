@@ -21,25 +21,10 @@ export class AppError extends Error {
     return new AppError(message, StatusCodes.BAD_REQUEST);
   }
 
-  static unauthorized(message: string): AppError {
-    return new AppError(message, StatusCodes.UNAUTHORIZED);
-  }
-
-  static forbidden(message: string): AppError {
-    return new AppError(message, StatusCodes.FORBIDDEN);
-  }
-
   static notFound(message: string): AppError {
     return new AppError(message, StatusCodes.NOT_FOUND);
   }
 
-  static conflict(message: string): AppError {
-    return new AppError(message, StatusCodes.CONFLICT);
-  }
-
-  static unprocessable(message: string): AppError {
-    return new AppError(message, StatusCodes.UNPROCESSABLE_ENTITY);
-  }
 
   static internal(message: string): AppError {
     return new AppError(message, StatusCodes.INTERNAL_SERVER_ERROR, false);
