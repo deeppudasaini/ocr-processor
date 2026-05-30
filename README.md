@@ -273,62 +273,96 @@ npm run test:coverage
 
 ## System Architecture
 
-### High-Level Flow
+### Database Schema Design
+# bill_infos
 
-```
-Client
-  │
-  ▼
-Express HTTP Server  (:3000)
-  │
-  ├── POST /api/v1/ocr/process
-  │     │
-  │     ├── 1. Upload file to storage (Local FS or MinIO)
-  │     ├── 2. Create OcrJob record in PostgreSQL
-  │     ├── 3. Set Redis cache: ocr:job:{id}:status = PENDING
-  │     ├── 4. Publish to Kafka topic: ocr.processing
-  │     └── 5. Return HTTP 202 { jobId }
-  │
-  ├── GET /api/v1/ocr/jobs/:jobId
-  │     └── Redis cache → PostgreSQL fallback
-  │
-  └── GET /api/v1/ocr/jobs/:jobId/stream  (SSE)
-        └── Poll Redis every 2s → push status events to client
-              │
-              ▼
-         Kafka Topic: ocr.processing
-              │
-              ▼
-         OcrJobConsumer (KafkaJS)
-              │
-              ▼
-         OcrProcessorRegistry
-              │
-              ▼
-         VedasOcrProcessorServiceImpl
-              │
-              ├── FETCHING_FILE      → Local FS / MinIO
-              ├── EXTRACTING_TEXT    → POST to Vedas OCR API (Axios)
-              ├── TRANSFORMING_DATA  → Normalize + map fields
-              ├── SAVING_DATA        → Persist BillInfo to PostgreSQL
-              └── COMPLETED          → Update DB + Redis
-```
+| Column Name      | Data Type | Remarks                                                                                                                                  |
+|------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------|
+| id               | uuid | Primary key of the bill record.                                                                                                          |
+| job_id           | uuid | References the OCR job that generated this bill data. Used to link extracted bill information with the processing job.                   |
+| merchant_name    | varchar(255) | Name of the merchant/vendor from the bill.                                                                                               |
+| merchant_address | text | Address of the merchant extracted from the bill.                                                                                         |
+| bill_date        | date | Date printed on the bill.                                                                                                                |
+| bill_time        | time | Time printed on the bill.                                                                                                                |
+| currency         | varchar(10) | Currency code of the bill amount (e.g., USD, NPR, EUR).                                                                                  |
+| subtotal_amount  | numeric(18,2) | Total amount before taxes, service charges, discounts, etc.                                                                              |
+| tax_amount       | numeric(18,2) | Tax amount charged on the bill.                                                                                                          |
+| service_charge   | numeric(18,2) | Service charge applied to the bill.                                                                                                      |
+| tip_amount       | numeric(18,2) | Tip or gratuity amount.                                                                                                                  |
+| discount_amount  | numeric(18,2) | Discount deducted from the bill.                                                                                                         |
+| total_amount     | numeric(18,2) | Final payable amount after all additions and deductions.                                                                                 |
+| udf1             | text | User-defined/custom field for future extensions.                                                     |
+| udf2             | text | User-defined/custom field for future extensions.                                                                                         |
+| bill_format      | text | Identified bill template or format type used during OCR processing. seperates different kind of invoice. (eg. DEVNAGARI, ENGLISH, OTHERS) |
+| bill_date_bs     | text | stores dates that are devnagari specific.                                                                                                |
 
-### Job Status Lifecycle
+| created_at | timestamp with time zone | Timestamp when the bill record was created. |
 
-Every stage of processing updates both PostgreSQL and Redis atomically:
+---
 
-```
-PENDING
-  └── PROCESSING_STARTED
-        └── FETCHING_FILE
-              └── EXTRACTING_TEXT
-                    └── TRANSFORMING_DATA
-                          └── SAVING_DATA
-                                └── COMPLETED
+# bill_items
 
-  (any stage can transition to) → FAILED
-```
+| Column Name | Data Type | Remarks |
+|------------|-----------|----------|
+| id | uuid | Primary key of the bill item record. |
+| bill_id | uuid | Foreign key referencing `bill_infos.id`. Associates item with a specific bill. |
+| item_name | varchar(500) | Name/description of the purchased item. |
+| quantity | numeric(18,2) | Quantity of the item purchased. |
+| unit_price | numeric(18,2) | Price per unit of the item. |
+| total_price | numeric(18,2) | Total price for the item (`quantity × unit_price`). |
+| udf1 | text | User-defined/custom field for additional item metadata. |
+| udf2 | text | User-defined/custom field for additional item metadata. |
+| created_at | timestamp with time zone | Timestamp when the item record was created. |
+
+---
+
+# ocr_jobs
+
+| Column Name | Data Type | Remarks                                                                                                           |
+|------------|-----------|-------------------------------------------------------------------------------------------------------------------|
+| id | uuid | Primary key of the OCR job.                                                                                       |
+| job_type | varchar(100) | Type of job according to ocr extractor (e.g., VEDAS_STUDIO_EXTRACTOR, OWN, others).                               |
+| job_status | varchar(50) | Current processing status (Pending, Processing, Completed, Failed, etc.).                                         |
+| requested_by | varchar(255) | User, system, or service that initiated the OCR request.                                                          |
+| file_path | text | Storage path or location of the uploaded file.                                                                    |
+| file_storage | varchar(20) | Storage provider/type (e.g., Local, S3, MinIO, Azure Blob).                                                       |
+| requested_on | timestamp with time zone | Timestamp when OCR processing was requested.                                                                      |
+| completed_on | timestamp with time zone | Timestamp when OCR processing completed.                                                                          |
+| error_message | text | Error details if OCR processing failed.                                                                           |
+| job_meta | jsonb | Additional metadata related to the OCR job, stored as JSON. Original filenames and other metadata are stored here |
+| created_at | timestamp with time zone | Record creation timestamp.                                                                                        |
+| updated_at | timestamp with time zone | Last update timestamp.                                                                                            |
+
+---
+
+# api_logs
+
+| Column Name | Data Type | Remarks                                                                     |
+|------------|-----------|-----------------------------------------------------------------------------|
+| id | uuid | Primary key of the API log record.                                          |
+| url | text | API endpoint URL that was invoked.                                          |
+| request_payload | jsonb | Complete request body sent to the API. Useful for debugging and auditing.   |
+| response_payload | jsonb | Response body returned by the API.                                          |
+| requested_on | timestamp with time zone | Timestamp when the API request was received.                                |
+| response_on | timestamp with time zone | Timestamp when the API response was returned.                               |
+| status | varchar(50) | API execution status (Success, Failed, Error, Timeout, etc.).               |
+| owner_type | varchar(100) | Entity type associated with the API call (e.g., OCR_JOB, BILL, SYSTEM).     |
+| owner_id | uuid | Identifier of the associated entity record. (Eg: Job Id for owner type Job) |
+| created_at | timestamp with time zone | Timestamp when the log entry was created.                                   |
+
+---
+
+# Relationships
+
+| Parent Table | Child Table | Relationship | Description |
+|-------------|------------|-------------|-------------|
+| ocr_jobs.id | bill_infos.job_id | One-to-Many | One OCR job can produce one or more extracted bill records. |
+| bill_infos.id | bill_items.bill_id | One-to-Many | One bill can contain multiple line items/products. |
+| api_logs.owner_id | Various Entities | Polymorphic | API logs can be associated with OCR jobs, bills, or other entities based on `owner_type`. |
+
+
+#### Entity Relationship Diagram
+<img src="./docs/ERD.png" alt="Entity Relationship Diagram" width="800"/>
 
 ### Database Schema
 
@@ -475,7 +509,6 @@ This design follows the **Open/Closed Principle** — the system is open for ext
 **Why:**
 - The Vedas API returns inconsistent field names across versions (`merchant_name` vs `merchantName`) and may nest data under a `data` envelope.
 - Invoices from Nepali merchants return content in Devanagari script. Numeric fields contain Unicode digits (`०–९`, U+0966–U+096F) which `parseFloat()` and PostgreSQL `numeric` columns cannot parse.
-- Dates are in Bikram Sambat (BS) format, approximately 56–57 years ahead of Gregorian with irregular month lengths that do not follow any mathematical formula. A lookup-table-based BS-to-AD converter produces a valid Gregorian date for storage.
 - Both the original BS string and converted AD date are stored — BS in `bill_date_bs` (varchar) for display, AD in `bill_date` (date) for queries and sorting.
 - Isolating all normalization in a single pure function makes it independently testable and keeps `transformData` clean regardless of upstream API changes.
 
@@ -505,17 +538,17 @@ This design follows the **Open/Closed Principle** — the system is open for ext
 
 ## API Reference
 
-### `POST /api/v1/ocr/process`
+### `POST /api/v1/ocr/upload`
 Upload one or more invoice images for OCR processing.
 
 - **Content-Type:** `multipart/form-data`
 - **Field name:** `files` (supports multiple files in one request)
-- **Accepted types:** JPEG, JPG, PNG, GIF, WEBP, BMP, TIFF
+- **Accepted types:** JPEG, JPG, PNG
 - **Max file size:** 10MB per file
-- **Max files per request:** 10
+- **Max files per request:** 5 files. (At Max only 6 sse conection per browser is only possible. Thats why I chose to set the max file upload to 5. If more than 5 files are uploaded, the request will be rejected with a `HTTP 400` response.)
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/ocr/process \
+curl -X POST http://localhost:3000/api/v1/ocr/upload \
   -F "files=@invoice1.jpg" \
   -F "files=@invoice2.png"
 ```
@@ -535,7 +568,7 @@ curl -X POST http://localhost:3000/api/v1/ocr/process \
 ---
 
 ### `GET /api/v1/ocr/jobs/:jobId`
-Poll the current status of an OCR job.
+Poll the current status of an OCR job. This api can be used to poll/check job status in case of SSE connection is disconnected.
 
 **Response `HTTP 200`:**
 ```json
@@ -569,36 +602,17 @@ Poll the current status of an OCR job.
 ### `GET /api/v1/ocr/jobs/:jobId/stream`
 Subscribe to real-time job status updates via Server-Sent Events. Stream closes automatically on terminal status or after 5 minutes.
 
-| Event    | When                                    | Payload                                                |
-|----------|-----------------------------------------|--------------------------------------------------------|
-| `status` | On connect + every ~2s during polling  | `{ jobId, status, completedOn, errorMessage }`         |
-| `done`   | Terminal status reached                 | `{ jobId }`                                            |
-| `error`  | Polling error or 5-minute timeout       | `{ jobId, message }`                                   |
+| Event    | When                                  | Payload                                                |
+|----------|---------------------------------------|--------------------------------------------------------|
+| `status` | On connect + every ~2s during polling | `{ jobId, status, completedOn, errorMessage }`         |
+| `done`   | Terminal status reached               | `{ jobId }`                                            |
+| `error`  | Polling error or 3-minute timeout     | `{ jobId, message }`                                   |
 
 ```javascript
 const es = new EventSource(`/api/v1/ocr/jobs/${jobId}/stream`);
 es.addEventListener('status', (e) => console.log(JSON.parse(e.data)));
 es.addEventListener('done',   ()  => es.close());
 es.addEventListener('error',  (e) => { console.error(e); es.close(); });
-```
-
----
-
-### `DELETE /api/v1/ocr/cleanup`
-Deletes locally stored files for all jobs in a terminal status. Files for in-progress jobs are never touched. Safe to call multiple times — already-deleted files are counted as success.
-
-**Response `HTTP 200`:**
-```json
-{
-  "code": 200,
-  "message": "Cleanup completed successfully",
-  "data": {
-    "deletedFiles": ["ocr-uploads/invoice-abc123.jpg"],
-    "failedFiles": [],
-    "totalDeleted": 1,
-    "totalFailed": 0
-  }
-}
 ```
 
 ---
@@ -624,93 +638,8 @@ Deletes locally stored files for all jobs in a terminal status. Files for in-pro
 
 - **No retry mechanism** — Failed OCR jobs must be manually resubmitted. A retry queue with exponential backoff would improve reliability in production.
 - **Single OCR provider active** — While the architecture supports multiple providers, only Vedas Studios is integrated.
-- **BS date range** — Bikram Sambat dates outside 1970–2100 BS cannot be converted and are stored as `null`.
-- **SSE timeout requires client reconnection** — The 5-minute stream timeout requires the client to open a new connection. `Last-Event-ID` support would allow seamless reconnection without missing events.
-- **Manual Kafka topic creation** — The topic must exist before first run. Auto-topic creation is disabled by default in production Kafka clusters.
-- **No authentication** — All API endpoints are publicly accessible. JWT or API key authentication should be added before production deployment.
+- **SSE timeout requires client reconnection** — The -minute stream timeout requires the client to open a new connection. `Last-Event-ID` support would allow seamless reconnection without missing events.
 - **MinIO bucket must exist** — The bucket is not auto-created on startup when `STORAGE_TYPE=minio`.
-
+- **Kafka Commit Management** — Currently, system is relying more on kafka to commit the logs. Auto commit can be removed and can be commited from the application and Dead letter Queue can be introduced to restore and replay every lost messages or those messages that throws issues. It will make easier to implement retry merchanism.
+- ** Redis Pub Sub** - Redis PubSub can be used to publish the status of the job instead of polling the redis every 2 second. It will reduce the number of request to redis and it will be more efficient way to get the real time status of the job.
 ---
-
-## Project Structure
-
-```
-src/
-├── config/
-│   ├── env.ts                           # Environment variable parsing
-│   └── server.ts                        # CORS and compression config
-│
-├── infra/
-│   ├── cache/
-│   │   └── redis.ts                     # ioredis client, get/set helpers
-│   ├── database/
-│   │   ├── typeorm/
-│   │   │   └── data-source.ts           # TypeORM DataSource
-│   │   └── migrations/                  # Database migration files
-│   ├── http/
-│   │   └── httpServer.ts                # Express app factory
-│   ├── monitoring/
-│   │   └── logger.ts                    # Winston logger
-│   ├── queue/
-│   │   └── consumers/
-│   │       └── base.consumer.ts         # Abstract Kafka consumer
-│   └── storage/
-│       ├── local/storage.ts             # Local filesystem service
-│       └── minio/minio.client.ts        # MinIO/S3 service
-│
-├── modules/
-│   └── ocr/
-│       ├── controllers/
-│       │   └── ocr.controller.ts        # Route handlers
-│       ├── dtos/
-│       │   └── create-job.dto.ts        # Request shapes
-│       ├── models/
-│       │   ├── ocr-job.model.ts         # OcrJob entity
-│       │   └── bill-info.model.ts       # BillInfo entity
-│       ├── queue/
-│       │   ├── ocr-job.producer.ts      # Kafka producer
-│       │   └── consumers/
-│       │       └── ocr-job.consumer.ts  # Kafka consumer
-│       ├── repositories/
-│       │   ├── ocr.repository.ts        # OcrJob data access
-│       │   └── bill-info.repository.ts  # BillInfo data access
-│       ├── routes/
-│       │   └── ocr.routes.ts            # Express router
-│       ├── types/
-│       │   └── ocr.types.ts             # Shared types
-│       ├── usecases/
-│       │   ├── create-invoice-processing-job.usecase.ts
-│       │   ├── check-ocr-job-status.usecase.ts
-│       │   ├── stream-ocr-job-status.usecase.ts
-│       │   └── cleanup-ocr-uploads.usecase.ts
-│       ├── validators/
-│       │   └── ocr.validator.ts         # Multer file upload config
-│       └── workers/
-│           ├── abstracts/
-│           │   └── ocr-processor.abstract.ts    # Generic pipeline base class
-│           ├── registry/
-│           │   └── ocr.registry.ts              # Provider registry + adapter
-│           ├── services/
-│           │   └── vedas/
-│           │       ├── vedas-ocr-processor.service.ts
-│           │       └── vedas-response-normalizer.ts
-│           └── utils/
-│               └── date-converter.ts            # BS to AD conversion
-│
-└── shared/
-    ├── constants/
-    │   ├── ocr-job-status.enum.ts
-    │   └── ocr-processor.enum.ts
-    ├── errors/
-    │   └── AppError.ts
-    ├── interfaces/
-    │   └── index.ts                     # IBaseUseCase
-    ├── middlewares/
-    │   ├── error/
-    │   │   ├── errorHandler.ts
-    │   │   └── notFound.ts
-    │   ├── asyncHandler.ts
-    │   └── sendResponse.ts
-    └── utils/
-        └── date-converter.ts
-```

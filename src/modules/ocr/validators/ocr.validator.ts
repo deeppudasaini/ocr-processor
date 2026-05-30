@@ -39,7 +39,7 @@ const upload = multer({
   fileFilter,
 });
 
-export const uploadInvoiceFile: RequestHandler = upload.array('file',MAX_FILE_COUNT);
+export const uploadInvoiceFile: RequestHandler = upload.array('files',MAX_FILE_COUNT);
 
 export const requireFile: RequestHandler = (req, _res, next): void => {
   const files = req.files as Express.Multer.File[] | undefined;
