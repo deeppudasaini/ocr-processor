@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+.git/
+.github/
+*.md
+*.log
+.DS_Store
+docker/
+k8s/
+tests/

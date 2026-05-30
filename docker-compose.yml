@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: ocr_db
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_DATABASE:-ocr_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ocr_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ocr_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ocr_redis_data:/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: ocr_minio
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ocr_minio_data:/data
+    restart: unless-stopped
+
+  kafka:
+    image: bitnami/kafka:3.5
+    container_name: ocr_kafka
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - ocr_kafka_data:/bitnami/kafka
+    restart: unless-stopped
+
+volumes:
+  ocr_db_data:
+  ocr_redis_data:
+  ocr_minio_data:
+  ocr_kafka_data:
