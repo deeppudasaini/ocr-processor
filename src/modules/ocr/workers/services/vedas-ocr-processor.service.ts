@@ -34,7 +34,11 @@ export class VedasOcrProcessorServiceImpl extends OcrProcessorAbstract<Buffer, V
       const res          = await fetch(apiUrl, { method: 'POST', body: formData });
       const responseTime = new Date();
       const responseData = await res.json() as VedasApiResponse;
-
+      if (!res.ok || !responseData.success) {
+        throw new Error(`Vedas API error: ${res.status} ${res.statusText}`,{
+          cause:responseData
+        });
+      }
       await this.billInfoRepo.logApiCall({
         url:             apiUrl,
         requestPayload:  { files: 'binary buffer' },
@@ -46,14 +50,15 @@ export class VedasOcrProcessorServiceImpl extends OcrProcessorAbstract<Buffer, V
         ownerId:         job.id,
       });
 
-      if (!res.ok || !responseData.success) {
-        throw new Error(`Vedas API error: ${res.status} ${res.statusText}`);
-      }
-
       return responseData;
     } catch (error) {
+
+      const err = error as Error & { cause?: unknown };
+
       await this.billInfoRepo.logApiCall({
         url:         apiUrl,
+        requestPayload:  { files: 'binary buffer' },
+        responsePayload:err.cause as Record<string, unknown>,
         requestedOn: requestTime,
         responseOn:  new Date(),
         status:      'FAILED',

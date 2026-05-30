@@ -24,17 +24,9 @@ let _kafka: Kafka | null = null;
 export const getKafkaClient = (): Kafka => {
   if (!_kafka) {
     _kafka = new Kafka({
-      clientId: env?.KAFKA_CLIENT_ID || "ocr-service",
-      brokers: env?.KAFKA_BROKERS.split(',').map((b) => b.trim()) || ['localhost:9092'],
-      ssl: env?.KAFKA_SSL || false,
-      sasl:
-        env?.KAFKA_SASL_MECHANISM && env?.KAFKA_SASL_USERNAME && env?.KAFKA_SASL_PASSWORD
-          ? {
-              mechanism: env?.KAFKA_SASL_MECHANISM as 'plain',
-              username: env?.KAFKA_SASL_USERNAME || '',
-              password: env?.KAFKA_SASL_PASSWORD || '',
-            }
-          : undefined,
+      clientId: env?.KAFKA_CLIENT_ID || 'ocr-service',
+      brokers: env?.KAFKA_BROKERS.split(',').map(b => b.trim()),
+      ssl: String(env?.KAFKA_BROKERS).toLowerCase() === 'true',
       logCreator: () => kafkaLogger(),
     });
   }

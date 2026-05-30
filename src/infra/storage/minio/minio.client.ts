@@ -9,7 +9,6 @@ export class MinioStorageService {
 
   constructor() {
     this.bucket = env?.MINIO_BUCKET || 'ocr-bucket';
-
     let endPoint = env?.MINIO_ENDPOINT || '127.0.0.1';
     let port = 9000;
     let useSSL = false;
@@ -23,7 +22,8 @@ export class MinioStorageService {
         port = url.protocol === 'https:' ? 443 : 80;
       }
       useSSL = url.protocol === 'https:';
-    } catch {
+    } catch(err:any) {
+      console.warn('[MinIO] MINIO_ENDPOINT is not a valid URL, using defaults. Error:', err?.message);
       logger.error('[MinIO] Invalid MINIO_ENDPOINT format, expected URL. Falling back to defaults.');
     }
 

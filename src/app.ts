@@ -33,8 +33,6 @@ export function createApp(): Application {
 
   app.use(responseHandler);
 
-  app.use(notFound);
-  app.use(errorHandler);
 
   return app;
 }
