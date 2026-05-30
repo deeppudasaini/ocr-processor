@@ -9,8 +9,9 @@ export abstract class BaseConsumer {
   constructor(groupId: string="ocr-service-group") {
     this.consumer = getKafkaClient().consumer({
       groupId: groupId ?? env?.KAFKA_GROUP_ID,
-      sessionTimeout: 30000,
+      sessionTimeout: 60000,
       heartbeatInterval: 3000,
+      rebalanceTimeout: 120000
     });
   }
 

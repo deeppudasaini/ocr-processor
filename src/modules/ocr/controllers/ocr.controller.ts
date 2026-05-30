@@ -1,4 +1,3 @@
-// ocr.controller.ts
 import { Request, Response } from 'express';
 import { CreateInvoiceProcessingJobUseCase } from '@modules/ocr/usecases/create-invoice-processing-job.usecase';
 import { CheckOcrJobStatusUseCase } from '@modules/ocr/usecases/check-ocr-job-status.usecase';
@@ -12,7 +11,6 @@ export class OcrController {
   private readonly checkStatusUseCase = new CheckOcrJobStatusUseCase();
   private readonly streamStatusUseCase = new StreamOcrJobStatusUseCase();
 
-// ocr.controller.ts
   processInvoice = asyncHandler(async (req: Request, res: Response) => {
     const files = req.files as Express.Multer.File[];
 
