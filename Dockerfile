@@ -1,4 +1,5 @@
 
+
 FROM node:20-alpine AS builder
 
 
@@ -25,7 +26,6 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 
 
-
 COPY tsconfig.json ./
 COPY tsconfig.build.json ./
 
@@ -36,7 +36,7 @@ RUN mkdir -p uploads logs
 EXPOSE 3000
 
 
-CMD ["node", "-r", "tsconfig-paths/register", "dist/server.js"]
+CMD ["node","dist/server.js"]
 
 
 
