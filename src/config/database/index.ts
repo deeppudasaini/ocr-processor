@@ -9,7 +9,7 @@ export const databaseConfig: DataSourceOptions = {
   password: env?.DB_PASSWORD,
   database: env?.DB_NAME,
   schema: env?.DB_SCHEMA,
-  ssl: env?.DB_SSL ? { rejectUnauthorized: false } : false,
+  ssl: false,
   synchronize: env?.DB_SYNCHRONIZE,
   logging: env?.DB_LOGGING,
   entities: [__dirname + '/../../modules/**/models/*.model.{ts,js}'],

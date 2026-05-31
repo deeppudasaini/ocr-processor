@@ -1,8 +1,42 @@
-FROM node:20-alpine
+
+FROM node:20-alpine AS builder
+
+
 WORKDIR /app
-RUN apk add --no-cache curl
-COPY package*.json tsconfig*.json ./
-RUN npm install
+
+
+COPY package*.json ./
+RUN npm ci
+
+
 COPY . .
-EXPOSE 3000 9229
-CMD ["npm", "run", "dev"]
+RUN npm run build
+
+FROM node:20-alpine AS production
+
+
+WORKDIR /app
+
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+
+COPY --from=builder /app/dist ./dist
+
+
+
+COPY tsconfig.json ./
+COPY tsconfig.build.json ./
+
+
+RUN mkdir -p uploads logs
+
+
+EXPOSE 3000
+
+
+CMD ["node", "-r", "tsconfig-paths/register", "dist/server.js"]
+
+
+

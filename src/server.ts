@@ -1,4 +1,3 @@
-import 'tsconfig-paths/register';
 import { createApp } from './app';
 import { logger } from '@infra/monitoring/logger';
 import { AppDataSource } from '@infra/database/typeorm/data-source';
