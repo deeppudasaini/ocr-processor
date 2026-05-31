@@ -7,9 +7,7 @@
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [External Dependencies](#external-dependencies)
 3. [Setup & Installation](#setup--installation)
-4. [Environment Variables](#environment-variables)
 5. [Running the Application](#running-the-application)
 6. [Running Tests](#running-tests)
 7. [System Architecture](#system-architecture)
@@ -22,126 +20,60 @@
 ---
 
 ## Prerequisites
+ - Just need docker to run the project
 
-| Tool         | Version    | Notes                                  |
-|--------------|------------|----------------------------------------|
-| Node.js      | `>= 20.x`  | Required for native `fetch` support    |
-| npm          | `>= 10.x`  |                                        |
-| PostgreSQL   | `>= 15.x`  | Primary data store                     |
-| Redis        | `>= 7.x`   | Job status cache                       |
-| Apache Kafka | `>= 3.x`   | Async job queue                        |
-| Docker       | Optional   | Recommended for running dependencies   |
 
----
+### Requirements
+- [Docker](https://www.docker.com/get-started)
+- [Docker Compose](https://docs.docker.com/compose/install/)
 
-## External Dependencies
-
-### Redis
-**Purpose:** Caches job status at every pipeline transition so the status check endpoint and SSE stream can serve results without hitting PostgreSQL on every request.
-
-- Key pattern: `ocr:job:{jobId}:status`
-- TTL: 86400 seconds (24 hours)
-- Used by: `CheckOcrJobStatusUseCase`, `StreamOcrJobStatusUseCase`, `OcrProcessorAbstract`
-
-**Installation:**
-```bash
-# macOS
-brew install redis
-brew services start redis
-
-# Ubuntu
-sudo apt install redis-server
-sudo systemctl start redis
-
-# Docker
-docker run -d -p 6379:6379 --name redis redis:alpine
-```
+That's it. No Node.js, no PostgreSQL, no Redis, no Kafka installation needed.
 
 ---
 
-### Apache Kafka
-**Purpose:** Decouples invoice upload from OCR processing. The HTTP server publishes a lightweight message to Kafka and returns `HTTP 202` immediately. A separate consumer process picks up the message and runs the heavy OCR pipeline asynchronously.
+### Steps
 
-- Topic: `ocr.processing`
-- Consumer Group: `ocr-job-worker-group`
-- Message shape: `{ jobId: string, extractor: string }`
+**1. Clone the repository**
+git clone <repository-url>
+cd ocr-extraction
 
-**Installation:**
-```bash
-# Docker Compose (recommended)
-docker-compose up -d kafka zookeeper
-```
+**2. Copy the environment file**
+cp .env.example .env
 
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-    ports:
-      - "2181:2181"
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-
-  redis:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
-
-  postgres:
-    image: postgres:15
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: appuser
-      POSTGRES_PASSWORD: apppassword
-      POSTGRES_DB: ocr_db
-```
+**3. Start everything**
+docker-compose up --build
 
 ---
 
-### PostgreSQL
-**Purpose:** Primary persistent store for OCR job records (`ocr_jobs`), extracted bill data (`bill_infos`, `bill_items`), and third-party API call audit logs.
+### That's it. The following services start automatically:
 
-**Installation:**
-```bash
-# macOS
-brew install postgresql@15
-brew services start postgresql@15
-
-# Ubuntu
-sudo apt install postgresql-15
-sudo systemctl start postgresql
-
-# Docker (included in docker-compose.yml above)
-```
+| Service    | URL / Port                  | Credentials                        |
+|------------|-----------------------------|------------------------------------|
+| API        | http://localhost:3000       |                                    |
+| MinIO UI   | http://localhost:9001       | minioadmin / minioadmin            |
+| PostgreSQL | localhost:5432              | appuser / AppUser@2025@            |
+| Redis      | localhost:6379              | password: Redis123                 |
+| Kafka      | localhost:29092             |                                    |
 
 ---
 
-### MinIO (Optional — Production Only)
-**Purpose:** S3-compatible object storage for uploaded invoice images. Local filesystem is used in development. The storage backend is swapped via the `STORAGE_TYPE` environment variable with no code changes.
+### The following are set up automatically on first run:
+- ✅ Database tables created from `scripts/ddl.sql`
+- ✅ Kafka topic `ocr.processing` created
+- ✅ MinIO bucket `uploads` created
 
-```bash
-# Docker
-docker run -d -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin \
-  --name minio \
-  minio/minio server /data --console-address ":9001"
-```
+---
 
+### Verify the app is running
+curl http://localhost:3000/api/v1/health
+
+---
+
+### Stop the application
+docker-compose down
+
+### Stop and remove all data (full reset)
+docker-compose down -v
 ---
 
 ## Setup & Installation
@@ -169,107 +101,18 @@ cp .env.example .env
 ### 4. Start infrastructure dependencies
 
 ```bash
-docker-compose up -d
+docker-compose up --build
 ```
 
-### 5. Run database migrations
-
-```bash
-npm run migration:run
-```
-
-### 6. Create Kafka topic
-
-```bash
-docker exec -it <kafka-container-id> \
-  kafka-topics --create \
-  --topic ocr.processing \
-  --bootstrap-server localhost:9092 \
-  --partitions 1 \
-  --replication-factor 1
-```
-
-### 7. Build the project
-
-```bash
-npm run build
-```
-
----
-
-## Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-# Server
-PORT=3000
-NODE_ENV=development
-API_PREFIX=api/v1
-
-# Database
-DATABASE_URL=postgresql://appuser:apppassword@localhost:5432/ocr_db
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Kafka
-KAFKA_BROKERS=localhost:9092
-KAFKA_CLIENT_ID=invoice-processing-api
-OCR_KAFKA_TOPIC=ocr.processing
-
-# Storage — 'local' uses project filesystem, 'minio' uses MinIO/S3
-STORAGE_TYPE=local
-
-# MinIO (only required if STORAGE_TYPE=minio)
-MINIO_ENDPOINT=localhost
-MINIO_PORT=9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=ocr-uploads
-
-# OCR Provider
-VEDAS_OCR_API_URL=https://pos-ocr.vedastudios.com.np/api/v1/extract
-```
-
----
 
 ## Running the Application
 
 ### Development
 
 ```bash
+npm run build
 npm run dev
 ```
-
-### Production
-
-```bash
-npm run build
-npm start
-```
-
----
-
-## Running Tests
-
-```bash
-# All tests
-npm test
-
-# Unit tests only
-npm run test:unit
-
-# Integration tests only
-npm run test:integration
-
-# With coverage report
-npm run test:coverage
-```
-
-> **Note:** Integration tests require a live PostgreSQL instance. Set `DATABASE_URL` to a dedicated test database before running them. Redis is mocked in all tests via `jest.mock`.
-
----
 
 ## System Architecture
 
