@@ -55,19 +55,10 @@ function buildService() {
   (service as any).billInfoRepo = billInfoRepo;
   (service as any).localStorage = localStorage;
 
-  // Sensible defaults — individual tests override as needed.
-  ocrJobRepo.findById.mockResolvedValue(mockJob as any);
-  ocrJobRepo.updateStatus.mockResolvedValue(undefined);
-  ocrJobRepo.markCompleted.mockResolvedValue(undefined);
-  ocrJobRepo.markFailed.mockResolvedValue(undefined);
-  localStorage.getFile.mockResolvedValue(mockFileBuffer);
-  billInfoRepo.saveBillsInTransaction.mockResolvedValue(undefined);
-  billInfoRepo.logApiCall.mockResolvedValue(undefined);
 
   return { service, ocrJobRepo, billInfoRepo, localStorage };
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('VedasOcrProcessorServiceImpl (Unit)', () => {
 
