@@ -37,7 +37,6 @@ const config: Config = {
       statements: 80,
     },
   },
-  setupFilesAfterFramework: [],
   testTimeout: 30000,
   clearMocks: true,
   restoreMocks: true,

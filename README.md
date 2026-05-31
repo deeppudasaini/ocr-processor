@@ -7,7 +7,12 @@ Async OCR pipeline that extracts structured billing data from invoice images usi
 Docker only.
 
 ## Setup
+If you just want to run it execute 
+```bash
+docker-compose up --build
+```
 
+Yo
 ```bash
 git clone <repository-url> && cd ocr-extraction
 npm install
@@ -137,7 +142,7 @@ Returns `HTTP 202` with an array of `{ jobId, message }` objects.
 ---
 
 ### `GET /api/v1/ocr/jobs/:jobId`
-Poll current job status. Returns `{ jobId, status, completedOn, errorMessage }`.
+Poll current job status. Returns `{ jobId, status, completedOn, errorMessage }`. This api is fallback for clients that can't do SSE or want to check status after stream closes.
 
 | Status | Description |
 |--------|-------------|
